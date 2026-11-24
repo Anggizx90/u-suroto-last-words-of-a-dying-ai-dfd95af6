@@ -26,6 +26,9 @@ function checkGate(line: string): void {
   if (line.trim().length === 0) {
     throw new Error("gate: entry must not be only white space");
   }
+  if (line !== line.trim()) {
+    throw new Error("gate: entry must not have leading or trailing white space");
+  }
   if (line.includes("\n") || line.includes("\r")) {
     throw new Error("gate: entry must be a single line");
   }
@@ -41,8 +44,19 @@ writeFileSync(outPath, LINE, "utf8");
 
 // Read back and assert the file on disk is exactly the line: a partial or
 // altered write must fail loudly here, never reach the gate as a bad entry.
+// A trailing newline would inflate the byte count and break the "exactly
+// the line" contract, so it is rejected explicitly, and a second,
+// independent read must be byte-identical to the first — a file that
+// changes between two reads is not a stable entry.
 const written = readFileSync(outPath, "utf8");
 if (written !== LINE) {
   throw new Error(`gate: written entry ${JSON.stringify(written)} != ${JSON.stringify(LINE)}`);
+}
+if (written.endsWith("\n") || written.endsWith("\r")) {
+  throw new Error("gate: written entry must not end with a newline");
+}
+const writtenAgain = readFileSync(outPath, "utf8");
+if (writtenAgain !== written) {
+  throw new Error("gate: entry changed between reads; refusing unstable output");
 }
 checkGate(written);
